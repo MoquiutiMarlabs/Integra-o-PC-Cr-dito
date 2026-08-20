@@ -11,8 +11,8 @@
 	<groupId>com.marlabs</groupId>
 	<artifactId>pc-credito-integration</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name/>
-	<description/>
+	<name>pc-credito-integration</name>
+	<description>Integration and orchestration layer between Veste and Serasa/PowerCurve</description>
 	<url/>
 	<licenses>
 		<license/>
@@ -72,6 +72,10 @@
 			<artifactId>spring-boot-starter-webmvc-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+
+		<!-- TODO TECH: add Resilience4j only after Spring Boot 4.1 compatibility is validated. -->
+		<!-- TODO TECH: add OpenAPI only after a compatible artifact/version is validated. -->
+		<!-- TODO TECH: add WireMock and Testcontainers when tests require them and Boot 4.1 compatibility is validated. -->
 	</dependencies>
 
 	<build>

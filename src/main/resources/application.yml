@@ -1,0 +1,35 @@
+spring:
+  application:
+    name: pc-credito-integration
+
+serasa:
+  base-url: ${SERASA_BASE_URL:}
+  token-url: ${SERASA_TOKEN_URL:}
+  username: ${SERASA_USERNAME:}
+  password: ${SERASA_PASSWORD:}
+  client-id: ${SERASA_CLIENT_ID:}
+  client-secret: ${SERASA_CLIENT_SECRET:}
+  http:
+    connect-timeout: ${SERASA_CONNECT_TIMEOUT:3s}
+    read-timeout: ${SERASA_READ_TIMEOUT:10s}
+
+security:
+  m2m:
+    authentication-required: ${M2M_AUTHENTICATION_REQUIRED:true}
+  ip-whitelist:
+    enabled: ${IP_WHITELIST_ENABLED:false}
+    allowed-addresses: ${VESTE_ALLOWED_IPS:}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: never
+
+logging:
+  pattern:
+    level: "%5p [correlationId:%X{correlationId:-}]"
+

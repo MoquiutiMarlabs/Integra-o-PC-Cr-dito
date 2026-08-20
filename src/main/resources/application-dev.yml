@@ -1,0 +1,27 @@
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+serasa:
+  contract:
+    pj-input-mode: ${SERASA_PJ_INPUT_MODE:OMIT}
+
+server:
+  port: ${SERVER_PORT:8080}
+
+security:
+  m2m:
+    authentication-required: false
+  ip-whitelist:
+    enabled: ${IP_WHITELIST_ENABLED:false}
+
+management:
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    root: INFO
+    com.marlabs.pccredito: DEBUG

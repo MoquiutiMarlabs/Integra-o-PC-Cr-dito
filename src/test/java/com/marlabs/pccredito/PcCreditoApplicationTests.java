@@ -1,13 +1,12 @@
-package com.marlabs.pc_credito_integration;
+package com.marlabs.pccredito;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest
-class PcCreditoIntegrationApplicationTests {
+class PcCreditoApplicationTests {
 
 	@Test
-	void contextLoads() {
+	void contextLoadsWithoutExternalInfrastructure() {
 	}
-
 }

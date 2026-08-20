@@ -1,0 +1,25 @@
+spring:
+  config:
+    activate:
+      on-profile: prd
+
+serasa:
+  contract:
+    pj-input-mode: ${SERASA_PJ_INPUT_MODE:BLOCK}
+
+server:
+  port: ${SERVER_PORT:8080}
+
+security:
+  ip-whitelist:
+    enabled: ${IP_WHITELIST_ENABLED:true}
+
+management:
+  endpoint:
+    health:
+      show-details: never
+
+logging:
+  level:
+    root: INFO
+    com.marlabs.pccredito: INFO
