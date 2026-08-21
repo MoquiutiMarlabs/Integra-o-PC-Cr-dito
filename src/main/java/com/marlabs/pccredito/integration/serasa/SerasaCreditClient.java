@@ -1,28 +1,122 @@
 package com.marlabs.pccredito.integration.serasa;
 
-import org.springframework.stereotype.Component;
-
 import com.marlabs.pccredito.application.port.SerasaCreditGateway;
+import com.marlabs.pccredito.config.SerasaProperties;
 import com.marlabs.pccredito.domain.CreditAnalysis;
+import com.marlabs.pccredito.integration.serasa.dto.SerasaNovaPropostaRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestClient;
+
+import java.util.List;
 
 @Component
 public class SerasaCreditClient implements SerasaCreditGateway {
 
-	private final SerasaRequestMapper requestMapper;
+    private static final Logger LOGGER =
+            LoggerFactory.getLogger(SerasaCreditClient.class);
 
-	public SerasaCreditClient(SerasaRequestMapper requestMapper) {
-		this.requestMapper = requestMapper;
-	}
+    private final RestClient restClient;
+    private final SerasaRequestMapper requestMapper;
+    private final SerasaProperties properties;
 
-	@Override
-	public void submit(CreditAnalysis analysis, String idempotencyKey) {
-		// Mapping intentionally fails with SERASA-CONTRACT-001 before any HTTP call.
-		requestMapper.toNovaProposta(analysis, null);
+    public SerasaCreditClient(
+            RestClient serasaRestClient,
+            SerasaRequestMapper requestMapper,
+            SerasaProperties properties) {
 
-		// TODO: enable NovaProposta only after the contract and durable idempotency are ready.
-		// Selective retry may cover timeouts and HTTP 429/500/502/503/504 only.
-		// HTTP 400, invalid payloads, functional failures and recurring authentication
-		// errors must not be retried. A 401 token refresh may replay exactly once.
-	}
+        this.restClient = serasaRestClient;
+        this.requestMapper = requestMapper;
+        this.properties = properties;
+    }
+
+    @Override
+    public void submit(
+            CreditAnalysis analysis,
+            String idempotencyKey,
+            String accessToken) {
+
+        validateConfiguration();
+
+        SerasaNovaPropostaRequest request =
+                requestMapper.toNovaProposta(
+                        analysis,
+                        properties.getFonte()
+                );
+
+
+        long startedAt = System.nanoTime();
+
+        LOGGER.info(
+                "serasa_credit_started requestId={} operation=NovaProposta",
+                analysis.requestId()
+        );
+
+        try {
+
+            restClient
+                    .post()
+                    .uri(properties.getNovaPropostaPath())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header(
+                            HttpHeaders.AUTHORIZATION,
+                            "Bearer " + accessToken
+                    )
+                    .header(
+                            "X-Screenless-Kill-Null",
+                            "true"
+                    )
+                    .body(request)
+                    .retrieve()
+                    .toBodilessEntity();
+
+            LOGGER.info(
+                    "serasa_credit_finished requestId={} operation=NovaProposta technicalResult=success durationMs={}",
+                    analysis.requestId(),
+                    elapsedMillis(startedAt)
+            );
+
+        } catch (RuntimeException exception) {
+
+            LOGGER.warn(
+                    "serasa_credit_finished requestId={} operation=NovaProposta technicalResult=error durationMs={} errorType={}",
+                    analysis.requestId(),
+                    elapsedMillis(startedAt),
+                    exception.getClass().getSimpleName()
+            );
+
+            throw exception;
+        }
+    }
+
+    private void validateConfiguration() {
+
+        requireConfigured(
+                "SERASA_NOVA_PROPOSTA_PATH",
+                properties.getNovaPropostaPath()
+        );
+
+        requireConfigured(
+                "SERASA_FONTE",
+                properties.getFonte()
+        );
+    }
+
+    private static void requireConfigured(
+            String name,
+            String value) {
+
+        if (value == null || value.isBlank()) {
+            throw new IllegalStateException(
+                    "Required Serasa configuration is missing: " + name
+            );
+        }
+    }
+
+    private static long elapsedMillis(long startedAt) {
+        return (System.nanoTime() - startedAt) / 1_000_000;
+    }
 }
-

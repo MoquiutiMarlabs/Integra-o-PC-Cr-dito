@@ -13,7 +13,11 @@ public class SerasaProperties {
 	private final String password;
 	private final String clientId;
 	private final String clientSecret;
+	private final String userDomain;
+	private final String correlationId;
 	private final Http http;
+	private final String fonte;
+	private final String novaPropostaPath;
 
 	public SerasaProperties(
 			String baseUrl,
@@ -22,18 +26,38 @@ public class SerasaProperties {
 			String password,
 			String clientId,
 			String clientSecret,
-			Http http) {
+			String userDomain,
+			String correlationId,
+			Http http,
+			String fonte,
+			String novaPropostaPath) {
 		this.baseUrl = baseUrl;
 		this.tokenUrl = tokenUrl;
 		this.username = username;
 		this.password = password;
 		this.clientId = clientId;
 		this.clientSecret = clientSecret;
+		this.userDomain = userDomain;
+		this.correlationId = correlationId;
 		this.http = http;
+		this.fonte = fonte;
+		this.novaPropostaPath = novaPropostaPath;
 	}
 
 	public String getBaseUrl() {
 		return baseUrl;
+	}
+
+	public String getCorrelationId() {
+		return correlationId;
+	}
+
+	public String getFonte() {
+		return fonte;
+	}
+
+	public String getNovaPropostaPath() {
+		return novaPropostaPath;
 	}
 
 	public String getTokenUrl() {
@@ -54,6 +78,10 @@ public class SerasaProperties {
 
 	public String getClientSecret() {
 		return clientSecret;
+	}
+
+	public String getUserDomain() {
+		return userDomain;
 	}
 
 	public Http getHttp() {

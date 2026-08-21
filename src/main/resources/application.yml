@@ -9,6 +9,11 @@ serasa:
   password: ${SERASA_PASSWORD:}
   client-id: ${SERASA_CLIENT_ID:}
   client-secret: ${SERASA_CLIENT_SECRET:}
+  user-domain: ${SERASA_USER_DOMAIN:veste.com}
+  correlation-Id: ${SERASA_USER_CORRELATION_ID:}
+  fonte: ${SERASA_FONTE:}
+  nova-proposta-path: ${SERASA_NOVA_PROPOSTA_PATH:}
+
   http:
     connect-timeout: ${SERASA_CONNECT_TIMEOUT:3s}
     read-timeout: ${SERASA_READ_TIMEOUT:10s}

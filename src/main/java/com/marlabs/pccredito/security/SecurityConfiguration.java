@@ -28,7 +28,7 @@ public class SecurityConfiguration {
 				.logout(logout -> logout.disable())
 				.addFilterBefore(ipWhitelistFilter, AnonymousAuthenticationFilter.class)
 				.authorizeHttpRequests(authorize -> {
-					authorize.requestMatchers("/actuator/health", "/actuator/health/**").permitAll();
+					authorize.requestMatchers("/actuator/health", "/actuator/health/**", "/internal/dev/serasa/auth-check").permitAll();
 					if (authenticationRequired) {
 						authorize.anyRequest().denyAll();
 					}
