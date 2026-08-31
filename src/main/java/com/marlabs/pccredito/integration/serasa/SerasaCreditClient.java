@@ -4,14 +4,14 @@ import com.marlabs.pccredito.application.port.SerasaCreditGateway;
 import com.marlabs.pccredito.config.SerasaProperties;
 import com.marlabs.pccredito.domain.CreditAnalysis;
 import com.marlabs.pccredito.integration.serasa.dto.SerasaNovaPropostaRequest;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
-
-import java.util.List;
 
 @Component
 public class SerasaCreditClient implements SerasaCreditGateway {
@@ -34,7 +34,7 @@ public class SerasaCreditClient implements SerasaCreditGateway {
     }
 
     @Override
-    public void submit(
+    public String submit(
             CreditAnalysis analysis,
             String idempotencyKey,
             String accessToken) {
@@ -47,7 +47,6 @@ public class SerasaCreditClient implements SerasaCreditGateway {
                         properties.getFonte()
                 );
 
-
         long startedAt = System.nanoTime();
 
         LOGGER.info(
@@ -57,10 +56,11 @@ public class SerasaCreditClient implements SerasaCreditGateway {
 
         try {
 
-            restClient
+            ResponseEntity<String> response = restClient
                     .post()
                     .uri(properties.getNovaPropostaPath())
                     .contentType(MediaType.APPLICATION_JSON)
+                    .accept(MediaType.APPLICATION_JSON)
                     .header(
                             HttpHeaders.AUTHORIZATION,
                             "Bearer " + accessToken
@@ -71,13 +71,24 @@ public class SerasaCreditClient implements SerasaCreditGateway {
                     )
                     .body(request)
                     .retrieve()
-                    .toBodilessEntity();
+                    .toEntity(String.class);
 
             LOGGER.info(
-                    "serasa_credit_finished requestId={} operation=NovaProposta technicalResult=success durationMs={}",
+                    "serasa_credit_finished requestId={} operation=NovaProposta technicalResult=success httpStatus={} durationMs={}",
                     analysis.requestId(),
+                    response.getStatusCode().value(),
                     elapsedMillis(startedAt)
             );
+
+            String responseBody = response.getBody();
+
+            if (responseBody == null || responseBody.isBlank()) {
+                throw new IllegalStateException(
+                        "Serasa NovaProposta returned an empty response body"
+                );
+            }
+
+            return responseBody;
 
         } catch (RuntimeException exception) {
 

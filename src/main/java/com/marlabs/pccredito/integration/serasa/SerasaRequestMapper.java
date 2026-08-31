@@ -1,96 +1,80 @@
 package com.marlabs.pccredito.integration.serasa;
 
-import com.marlabs.pccredito.domain.CreditAnalysis;
-import com.marlabs.pccredito.integration.serasa.dto.SerasaNovaPropostaRequest;
+import java.math.BigDecimal;
+import java.util.List;
+
 import org.springframework.stereotype.Component;
 
-import java.util.List;
+import com.marlabs.pccredito.domain.CreditAnalysis;
+import com.marlabs.pccredito.integration.serasa.dto.SerasaNovaPropostaRequest;
 
 @Component
 public class SerasaRequestMapper {
+
+	private static final String SERVICE_ID = "NovaProposta";
+	private static final String PRODUCT = "EMPR";
+	private static final String SUBPRODUCT_1 = "Industria";
+
+	private static final String INTERNAL_PUNCTUALITY =
+			"Pontualidade Interna";
+
+	private static final String AVERAGE_DELAY_DAYS =
+			"Media dias de atraso";
+
+	private static final String AMOUNT_DUE =
+			"Valor a vencer";
+
+	private static final String OVERDUE_AMOUNT =
+			"Valor vencido";
 
 	public SerasaNovaPropostaRequest toNovaProposta(
 			CreditAnalysis analysis,
 			String fonte) {
 
-		/*
-		 * TODO SERASA-CONTRACT-001
-		 *
-		 * IMPORTANTE:
-		 * Os valores abaixo estão sendo utilizados APENAS para reproduzir
-		 * exatamente o payload PJ fornecido pela Serasa e validar tecnicamente
-		 * a chamada NovaProposta.
-		 *
-		 * Eles NÃO devem ser tratados como defaults ou regra de negócio.
-		 *
-		 * Confirmar formalmente com a Serasa/Veste a origem de:
-		 *
-		 * - Pontualidade Interna
-		 * - Media dias de atraso
-		 * - Valor a vencer
-		 * - Valor vencido
-		 */
-
-		long valorSolicitado;
-
-		try {
-			/*
-			 * TODO SERASA-CONTRACT-002:
-			 * Confirmar a unidade de ValorEmprestimoSolicitado.
-			 *
-			 * A API Serasa confirmou tecnicamente que o campo exige integer,
-			 * porém ainda deve ser confirmado se o valor representa reais,
-			 * centavos ou outra unidade contratual.
-			 */
-			valorSolicitado = analysis.requestedAmount().longValueExact();
-		} catch (ArithmeticException exception) {
-			throw new IllegalArgumentException(
-					"Valor solicitado deve ser inteiro para o contrato atual da Serasa",
-					exception
-			);
-		}
-
-		var produto = new SerasaNovaPropostaRequest.ProdutoSolicitado(
-				"EMPR",
-				"Industria",
-				"Novo",
-				valorSolicitado
-		);
+		var produto =
+				new SerasaNovaPropostaRequest.ProdutoSolicitado(
+						PRODUCT,
+						SUBPRODUCT_1,
+						analysis.customerRelationshipType().serasaValue(),
+						analysis.requestedAmount()
+				);
 
 		List<SerasaNovaPropostaRequest.DadoEntradaPersonalizado>
 				dadosEntradaPersonalizados = List.of(
 
-				new SerasaNovaPropostaRequest.DadoEntradaPersonalizado(
-						"Pontualidade Interna",
-						"100"
+				dado(
+						INTERNAL_PUNCTUALITY,
+						analysis.internalPunctuality()
 				),
 
-				new SerasaNovaPropostaRequest.DadoEntradaPersonalizado(
-						"Media dias de atraso",
-						"0"
+				dado(
+						AVERAGE_DELAY_DAYS,
+						analysis.averageDelayDays()
 				),
 
-				new SerasaNovaPropostaRequest.DadoEntradaPersonalizado(
-						"Valor a vencer",
-						"0"
+				dado(
+						AMOUNT_DUE,
+						analysis.amountDue()
 				),
 
-				new SerasaNovaPropostaRequest.DadoEntradaPersonalizado(
-						"Valor vencido",
-						"0"
+				dado(
+						OVERDUE_AMOUNT,
+						analysis.overdueAmount()
 				)
 		);
 
-		var application = new SerasaNovaPropostaRequest.Application(
-				"NovaProposta",
-				fonte,
-				produto,
-				dadosEntradaPersonalizados
-		);
+		var application =
+				new SerasaNovaPropostaRequest.Application(
+						SERVICE_ID,
+						fonte,
+						produto,
+						dadosEntradaPersonalizados
+				);
 
-		var applicant = new SerasaNovaPropostaRequest.Applicant(
-				analysis.cnpj()
-		);
+		var applicant =
+				new SerasaNovaPropostaRequest.Applicant(
+						analysis.cnpj()
+				);
 
 		var applicantContainer =
 				new SerasaNovaPropostaRequest.ApplicantContainer(
@@ -100,6 +84,26 @@ public class SerasaRequestMapper {
 		return new SerasaNovaPropostaRequest(
 				application,
 				applicantContainer
+		);
+	}
+
+	private SerasaNovaPropostaRequest.DadoEntradaPersonalizado dado(
+			String chave,
+			BigDecimal valor) {
+
+		return new SerasaNovaPropostaRequest.DadoEntradaPersonalizado(
+				chave,
+				valor.stripTrailingZeros().toPlainString()
+		);
+	}
+
+	private SerasaNovaPropostaRequest.DadoEntradaPersonalizado dado(
+			String chave,
+			Integer valor) {
+
+		return new SerasaNovaPropostaRequest.DadoEntradaPersonalizado(
+				chave,
+				Integer.toString(valor)
 		);
 	}
 }

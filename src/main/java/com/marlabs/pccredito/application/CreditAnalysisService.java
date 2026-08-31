@@ -7,7 +7,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import com.marlabs.pccredito.api.request.CreditAnalysisRequest;
-import com.marlabs.pccredito.api.response.CreditAnalysisResponse;
 import com.marlabs.pccredito.application.port.SerasaCreditGateway;
 import com.marlabs.pccredito.domain.CreditAnalysis;
 import com.marlabs.pccredito.idempotency.IdempotencyService;
@@ -17,84 +16,91 @@ import com.marlabs.pccredito.integration.serasa.SerasaTokenManager;
 @Service
 public class CreditAnalysisService {
 
-	private static final Logger LOGGER = LoggerFactory.getLogger(CreditAnalysisService.class);
+    private static final Logger LOGGER =
+            LoggerFactory.getLogger(CreditAnalysisService.class);
 
-	private final SerasaCreditGateway serasaCreditGateway;
-	private final IdempotencyService idempotencyService;
-	private final SerasaTokenManager serasaTokenManager;
+    private final SerasaCreditGateway serasaCreditGateway;
+    private final IdempotencyService idempotencyService;
+    private final SerasaTokenManager serasaTokenManager;
 
-	public CreditAnalysisService(
-			SerasaCreditGateway serasaCreditGateway,
-			IdempotencyService idempotencyService,
-			SerasaTokenManager serasaTokenManager) {
-		this.serasaCreditGateway = serasaCreditGateway;
-		this.idempotencyService = idempotencyService;
-		this.serasaTokenManager = serasaTokenManager;
-	}
+    public CreditAnalysisService(
+            SerasaCreditGateway serasaCreditGateway,
+            IdempotencyService idempotencyService,
+            SerasaTokenManager serasaTokenManager) {
 
-	public CreditAnalysisResponse analyze(
-			CreditAnalysisRequest request,
-			String idempotencyKey) {
+        this.serasaCreditGateway = serasaCreditGateway;
+        this.idempotencyService = idempotencyService;
+        this.serasaTokenManager = serasaTokenManager;
+    }
 
-		long startedAt = System.nanoTime();
+    public String analyze(
+            CreditAnalysisRequest request,
+            String idempotencyKey) {
 
-		String requestId = UUID.randomUUID().toString();
+        long startedAt = System.nanoTime();
 
-		CreditAnalysis analysis = new CreditAnalysis(
-				requestId,
-				request.cnpj(),
-				request.valorSolicitado()
-		);
+        String requestId = UUID.randomUUID().toString();
 
-		Reservation reservation =
-				idempotencyService.reserve(idempotencyKey, requestId);
+        CreditAnalysis analysis = new CreditAnalysis(
+                requestId,
+                request.cnpj(),
+                request.subproduto2(),
+                request.valorSolicitado(),
+                request.pontualidadeInterna(),
+                request.mediaDiasAtraso(),
+                request.valorAVencer(),
+                request.valorVencido()
+        );
 
-		LOGGER.info(
-				"credit_analysis_started requestId={} service=serasa",
-				requestId
-		);
+        Reservation reservation =
+                idempotencyService.reserve(
+                        idempotencyKey,
+                        requestId
+                );
 
-		try {
+        LOGGER.info(
+                "credit_analysis_started requestId={} service=serasa",
+                requestId
+        );
 
-			String accessToken =
-					serasaTokenManager.getValidAccessToken();
+        try {
 
-			serasaCreditGateway.submit(
-					analysis,
-					idempotencyKey,
-					accessToken
-			);
+            String accessToken =
+                    serasaTokenManager.getValidAccessToken();
 
-			idempotencyService.complete(reservation);
+            String serasaResponse =
+                    serasaCreditGateway.submit(
+                            analysis,
+                            idempotencyKey,
+                            accessToken
+                    );
 
-			LOGGER.info(
-					"credit_analysis_finished requestId={} service=serasa technicalResult=success durationMs={}",
-					requestId,
-					elapsedMillis(startedAt)
-			);
+            idempotencyService.complete(reservation);
 
-			return new CreditAnalysisResponse(
-					requestId,
-					"ACCEPTED"
-			);
+            LOGGER.info(
+                    "credit_analysis_finished requestId={} service=serasa technicalResult=success durationMs={}",
+                    requestId,
+                    elapsedMillis(startedAt)
+            );
 
-		} catch (RuntimeException exception) {
+            return serasaResponse;
 
-			idempotencyService.fail(reservation);
+        } catch (RuntimeException exception) {
 
-			LOGGER.warn(
-					"credit_analysis_finished requestId={} service=serasa technicalResult=error durationMs={} errorType={}",
-					requestId,
-					elapsedMillis(startedAt),
-					exception.getClass().getSimpleName()
-			);
+            idempotencyService.fail(reservation);
 
-			throw exception;
-		}
-	}
+            LOGGER.warn(
+                    "credit_analysis_finished requestId={} service=serasa technicalResult=error durationMs={} errorType={}",
+                    requestId,
+                    elapsedMillis(startedAt),
+                    exception.getClass().getSimpleName()
+            );
 
-	private long elapsedMillis(long startedAt) {
-		return (System.nanoTime() - startedAt) / 1_000_000;
-	}
+            throw exception;
+        }
+    }
+
+    private long elapsedMillis(long startedAt) {
+        return (System.nanoTime() - startedAt) / 1_000_000;
+    }
 }
-

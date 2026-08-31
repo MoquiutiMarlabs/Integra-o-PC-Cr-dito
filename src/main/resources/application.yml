@@ -10,7 +10,6 @@ serasa:
   client-id: ${SERASA_CLIENT_ID:}
   client-secret: ${SERASA_CLIENT_SECRET:}
   user-domain: ${SERASA_USER_DOMAIN:veste.com}
-  correlation-Id: ${SERASA_USER_CORRELATION_ID:}
   fonte: ${SERASA_FONTE:}
   nova-proposta-path: ${SERASA_NOVA_PROPOSTA_PATH:}
 
@@ -21,6 +20,7 @@ serasa:
 security:
   m2m:
     authentication-required: ${M2M_AUTHENTICATION_REQUIRED:true}
+
   ip-whitelist:
     enabled: ${IP_WHITELIST_ENABLED:false}
     allowed-addresses: ${VESTE_ALLOWED_IPS:}
@@ -30,6 +30,7 @@ management:
     web:
       exposure:
         include: health,info,prometheus
+
   endpoint:
     health:
       show-details: never
@@ -37,4 +38,3 @@ management:
 logging:
   pattern:
     level: "%5p [correlationId:%X{correlationId:-}]"
-

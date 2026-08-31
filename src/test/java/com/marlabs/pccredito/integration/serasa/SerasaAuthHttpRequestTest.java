@@ -1,13 +1,24 @@
 package com.marlabs.pccredito.integration.serasa;
 
+import static com.github.tomakehurst.wiremock.client.WireMock.containing;
+import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath;
+import static com.github.tomakehurst.wiremock.client.WireMock.okJson;
+import static com.github.tomakehurst.wiremock.client.WireMock.post;
+import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import java.time.Duration;
+
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.marlabs.pccredito.config.SerasaProperties;
+import com.marlabs.pccredito.integration.serasa.dto.SerasaTokenResponse;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
-
-import static com.github.tomakehurst.wiremock.client.WireMock.*;
 
 class SerasaAuthHttpRequestTest {
 
@@ -21,7 +32,9 @@ class SerasaAuthHttpRequestTest {
 
     @AfterEach
     void tearDown() {
-        wireMock.stop();
+        if (wireMock != null && wireMock.isRunning()) {
+            wireMock.stop();
+        }
     }
 
     @Test
@@ -40,20 +53,31 @@ class SerasaAuthHttpRequestTest {
                         )
         );
 
-        /*
-         * Monte SerasaProperties aqui com VALORES FICTÍCIOS:
-         *
-         * tokenUrl =
-         * http://localhost:<wiremock-port>/oauth2/experianone/v1/token
-         *
-         * username = test-user
-         * password = test-password
-         * clientId = test-client
-         * clientSecret = test-secret
-         * userDomain = veste.com
-         */
+        SerasaProperties properties = new SerasaProperties(
+                wireMock.baseUrl(),
+                wireMock.baseUrl() + "/oauth2/experianone/v1/token",
+                "test-user",
+                "test-password",
+                "test-client",
+                "test-secret",
+                "veste.com",
+                new SerasaProperties.Http(Duration.ofSeconds(1), Duration.ofSeconds(2)),
+                null,
+                null
+        );
+        java.net.http.HttpClient httpClient = java.net.http.HttpClient.newBuilder()
+                .version(java.net.http.HttpClient.Version.HTTP_1_1)
+                .build();
+        RestClient restClient = RestClient.builder()
+                .requestFactory(new JdkClientHttpRequestFactory(httpClient))
+                .build();
+        SerasaAuthClient authClient = new SerasaAuthClient(restClient, properties);
 
-        // execute authClient.requestToken()
+        SerasaTokenResponse token = authClient.requestToken();
+
+        assertEquals("fake-token", token.accessToken());
+        assertEquals("Bearer", token.tokenType());
+        assertEquals(3600L, token.expiresIn());
 
         wireMock.verify(
                 postRequestedFor(

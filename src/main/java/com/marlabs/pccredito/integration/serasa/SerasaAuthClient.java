@@ -3,12 +3,15 @@ package com.marlabs.pccredito.integration.serasa;
 import com.marlabs.pccredito.config.SerasaProperties;
 import com.marlabs.pccredito.integration.serasa.dto.SerasaTokenRequest;
 import com.marlabs.pccredito.integration.serasa.dto.SerasaTokenResponse;
+import com.marlabs.pccredito.observability.CorrelationIdFilter;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.MDC;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+
+import java.util.UUID;
 
 @Component
 public class SerasaAuthClient {
@@ -19,13 +22,18 @@ public class SerasaAuthClient {
     private final RestClient restClient;
     private final SerasaProperties properties;
 
-    public SerasaAuthClient(RestClient serasaRestClient, SerasaProperties properties) {
+    public SerasaAuthClient(
+            RestClient serasaRestClient,
+            SerasaProperties properties) {
+
         this.restClient = serasaRestClient;
         this.properties = properties;
     }
 
     public SerasaTokenResponse requestToken() {
+
         validateConfiguration();
+
         SerasaTokenRequest request = new SerasaTokenRequest(
                 properties.getUsername(),
                 properties.getPassword(),
@@ -33,35 +41,20 @@ public class SerasaAuthClient {
                 properties.getClientSecret()
         );
 
+        String serasaCorrelationId =
+                resolveSerasaCorrelationId(
+                        CorrelationIdFilter.currentCorrelationId()
+                );
+
         long startedAt = System.nanoTime();
+
+        LOGGER.info(
+                "serasa_auth_started operation=serasa-auth"
+        );
 
         try {
 
-            LOGGER.info(
-                    "serasa_auth_request " +
-                            "method=POST " +
-                            "url={} " +
-                            "contentType={} " +
-                            "accept={} " +
-                            "userDomainPresent={} " +
-                            "correlationIdPresent={} " +
-                            "usernamePresent={} " +
-                            "passwordPresent={} " +
-                            "clientIdPresent={} " +
-                            "clientSecretPresent={}",
-                    properties.getTokenUrl(),
-                    MediaType.APPLICATION_JSON_VALUE,
-                    MediaType.APPLICATION_JSON_VALUE,
-                    isConfigured(properties.getUserDomain()),
-                    isConfigured(properties.getCorrelationId()),
-                    isConfigured(properties.getUsername()),
-                    isConfigured(properties.getPassword()),
-                    isConfigured(properties.getClientId()),
-                    isConfigured(properties.getClientSecret())
-            );
-
-
-            RestClient.RequestBodySpec requestSpec = restClient
+            SerasaTokenResponse response = restClient
                     .post()
                     .uri(properties.getTokenUrl())
                     .contentType(MediaType.APPLICATION_JSON)
@@ -69,13 +62,11 @@ public class SerasaAuthClient {
                     .header(
                             "X-User-Domain",
                             properties.getUserDomain()
-                    );
-
-            if (properties.getCorrelationId() != null && !properties.getCorrelationId().isBlank()) {
-                requestSpec.header("X-Correlation-Id",properties.getCorrelationId());
-            }
-
-            SerasaTokenResponse response = requestSpec
+                    )
+                    .header(
+                            "X-Correlation-Id",
+                            serasaCorrelationId
+                    )
                     .body(request)
                     .retrieve()
                     .body(SerasaTokenResponse.class);
@@ -115,16 +106,60 @@ public class SerasaAuthClient {
         }
     }
 
-    private void validateConfiguration() {
-        requireConfigured("SERASA_TOKEN_URL", properties.getTokenUrl());
-        requireConfigured("SERASA_USERNAME", properties.getUsername());
-        requireConfigured("SERASA_PASSWORD",properties.getPassword());
-        requireConfigured("SERASA_CLIENT_ID",properties.getClientId());
-        requireConfigured("SERASA_CLIENT_SECRET",properties.getClientSecret());
-        requireConfigured("SERASA_USER_DOMAIN",properties.getUserDomain());
+    private String resolveSerasaCorrelationId(
+            String currentCorrelationId) {
+
+        if (currentCorrelationId != null
+                && !currentCorrelationId.isBlank()) {
+
+            try {
+                UUID.fromString(currentCorrelationId);
+                return currentCorrelationId;
+            } catch (IllegalArgumentException ignored) {
+                // Serasa exige UUID válido.
+            }
+        }
+
+        return UUID.randomUUID().toString();
     }
 
-    private static void requireConfigured(String name,String value) {
+    private void validateConfiguration() {
+
+        requireConfigured(
+                "SERASA_TOKEN_URL",
+                properties.getTokenUrl()
+        );
+
+        requireConfigured(
+                "SERASA_USERNAME",
+                properties.getUsername()
+        );
+
+        requireConfigured(
+                "SERASA_PASSWORD",
+                properties.getPassword()
+        );
+
+        requireConfigured(
+                "SERASA_CLIENT_ID",
+                properties.getClientId()
+        );
+
+        requireConfigured(
+                "SERASA_CLIENT_SECRET",
+                properties.getClientSecret()
+        );
+
+        requireConfigured(
+                "SERASA_USER_DOMAIN",
+                properties.getUserDomain()
+        );
+    }
+
+    private static void requireConfigured(
+            String name,
+            String value) {
+
         if (value == null || value.isBlank()) {
             throw new IllegalStateException(
                     "Required Serasa configuration is missing: " + name
@@ -135,9 +170,4 @@ public class SerasaAuthClient {
     private static long elapsedMillis(long startedAt) {
         return (System.nanoTime() - startedAt) / 1_000_000;
     }
-
-    private static boolean isConfigured(String value) {
-        return value != null && !value.isBlank();
-    }
-
 }

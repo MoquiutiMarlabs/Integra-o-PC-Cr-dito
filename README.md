@@ -1,175 +1,906 @@
-# pc-credito-integration
+# PC Cr√©dito Integration
 
-Camada de integraÁ„o e orquestraÁ„o do fluxo:
+Camada de integra√ß√£o e orquestra√ß√£o respons√°vel pela comunica√ß√£o entre os sistemas
+da Veste e a plataforma Serasa/PowerCurve.
 
 ```text
-Veste -> API Marlabs -> Serasa/PowerCurve -> API Marlabs -> Veste
+Veste / Linx
+     |
+     | JWT
+     v
+API Gateway Veste
+     |
+     v
+PC Cr√©dito Integration
+     |
+     | autentica√ß√£o Serasa
+     v
+Serasa / PowerCurve
 ```
 
-O projeto usa Java 25, Spring Boot 4.1.0 e Maven.
+## Objetivo
 
-## Objetivo e responsabilidades
+A aplica√ß√£o atua exclusivamente como uma camada de integra√ß√£o/orquestra√ß√£o.
 
-- receber solicitaÁıes tÈcnicas de an·lise de crÈdito da Veste;
-- validar o contrato HTTP de entrada;
-- controlar correlaÁ„o e preparar idempotÍncia;
-- traduzir modelos internos para contratos Serasa em uma fronteira isolada;
-- orquestrar autenticaÁ„o e chamadas Serasa quando os contratos estiverem formalizados;
-- devolver respostas tÈcnicas sem expor detalhes internos.
+Suas principais responsabilidades s√£o:
 
-## O que a aplicaÁ„o N√O faz
+- receber solicita√ß√µes de an√°lise de cr√©dito da Veste;
+- validar tecnicamente o contrato de entrada;
+- controlar correla√ß√£o das requisi√ß√µes;
+- controlar idempot√™ncia;
+- obter e reutilizar token de acesso da Serasa;
+- transformar o contrato Veste para o contrato Serasa;
+- consumir o servi√ßo `NovaProposta` do PowerCurve;
+- receber a resposta da Serasa;
+- futuramente transformar o retorno Serasa para um contrato est√°vel da Veste;
+- padronizar tratamento t√©cnico de erros;
+- fornecer observabilidade da integra√ß√£o.
 
-Esta aplicaÁ„o n„o È um motor de crÈdito. Ela n„o calcula score ou limite, n„o
-aprova, reprova ou reativa crÈdito e n„o cria regras financeiras. Toda decis„o de
-crÈdito pertence ao PowerCurve/Serasa ou ao sistema de negÛcio formalmente definido.
+## O que esta aplica√ß√£o N√ÉO faz
 
-Nenhum valor observado em collections ou exemplos È tratado como default ou regra.
+Esta aplica√ß√£o **n√£o √© um motor de cr√©dito**.
 
-## API inicial
+Portanto, n√£o √© responsabilidade desta aplica√ß√£o:
+
+- calcular score;
+- aprovar ou reprovar cr√©dito;
+- determinar limite;
+- definir pol√≠tica de cr√©dito;
+- reativar cr√©dito;
+- interpretar regras de decis√£o;
+- reproduzir regras existentes no PowerCurve.
+
+Decis√µes de cr√©dito pertencem ao PowerCurve/Serasa ou ao sistema de neg√≥cio
+formalmente definido pela Veste.
+
+---
+
+# Stack
+
+Stack atualmente adotada:
+
+- Java 25;
+- Spring Boot 4.1.x;
+- Maven;
+- Spring Web;
+- Spring Security;
+- Bean Validation;
+- Spring Actuator;
+- Micrometer;
+- JUnit 5;
+- Mockito;
+- WireMock.
+
+Novas tecnologias devem ser adicionadas somente quando houver necessidade t√©cnica
+e compatibilidade validada com a stack do projeto.
+
+---
+
+# Arquitetura
+
+Estrutura principal:
+
+```text
+src/main/java/com/marlabs/pccredito
+|
++-- api
+|   +-- controller
+|   +-- exception
+|   +-- request
+|   +-- response
+|
++-- application
+|   +-- port
+|
++-- config
+|
++-- domain
+|
++-- idempotency
+|
++-- integration
+|   +-- serasa
+|       +-- dto
+|
++-- observability
+|
++-- security
+|
++-- PcCreditoApplication.java
+```
+
+Responsabilidades:
+
+### `api`
+
+Contrato HTTP exposto para a Veste.
+
+Cont√©m controllers, requests, responses e tratamento padronizado de erros.
+
+### `application`
+
+Orquestra o caso de uso.
+
+Coordena:
+
+```text
+request
+  -> idempot√™ncia
+  -> token Serasa
+  -> gateway Serasa
+  -> resposta
+```
+
+N√£o cont√©m regras de decis√£o de cr√©dito.
+
+### `domain`
+
+Representa√ß√£o interna dos dados necess√°rios ao fluxo.
+
+N√£o deve conhecer detalhes HTTP ou estruturas espec√≠ficas como
+`DV-Application` e `DV-Applicant`.
+
+### `integration.serasa`
+
+Fronteira de integra√ß√£o com Serasa/PowerCurve.
+
+Respons√°vel por:
+
+- autentica√ß√£o Serasa;
+- gerenciamento de token;
+- montagem do payload `NovaProposta`;
+- chamada HTTP;
+- recebimento da resposta;
+- adapta√ß√£o entre contratos.
+
+### `security`
+
+Controles de seguran√ßa da API.
+
+A autentica√ß√£o corporativa definitiva ser√° realizada no ambiente da Veste atrav√©s
+do API Gateway e Microsoft Entra ID/SSO.
+
+### `observability`
+
+Correla√ß√£o e rastreabilidade t√©cnica das requisi√ß√µes.
+
+### `idempotency`
+
+Controle t√©cnico para impedir processamento duplicado de opera√ß√µes capazes de gerar
+uma nova proposta.
+
+---
+
+# Fluxo da opera√ß√£o
+
+Fluxo esperado:
+
+```text
+1. Linx/Veste solicita token ao SSO da Veste
+                       |
+                       v
+2. SSO emite JWT
+                       |
+                       v
+3. Linx/Veste chama API Gateway com JWT
+                       |
+                       v
+4. Gateway autentica e autoriza a chamada
+                       |
+                       v
+5. POST /v1/credit-analyses
+                       |
+                       v
+6. Correlation ID
+                       |
+                       v
+7. Bean Validation
+                       |
+                       v
+8. Idempotency-Key
+                       |
+                       v
+9. Obten√ß√£o/reutiliza√ß√£o do token Serasa
+                       |
+                       v
+10. Mapper Veste -> Serasa
+                       |
+                       v
+11. POST NovaProposta
+                       |
+                       v
+12. PowerCurve processa a proposta
+                       |
+                       v
+13. Resposta Serasa
+                       |
+                       v
+14. Resposta para Veste
+```
+
+---
+
+# Endpoint principal
 
 ```http
 POST /v1/credit-analyses
 Content-Type: application/json
-Idempotency-Key: valor-opcional
-X-Correlation-Id: valor-opcional
+Idempotency-Key: credito-12345678000199-001
+X-Correlation-Id: <opcional>
 ```
+
+Exemplo completo:
 
 ```json
 {
   "cnpj": "12345678000199",
-  "valorSolicitado": 10000.00
+  "subproduto2": "Novo",
+  "valorSolicitado": 10000,
+  "pontualidadeInterna": 87.5,
+  "mediaDiasAtraso": 12,
+  "valorAVencer": 15000.75,
+  "valorVencido": 2500.30
 }
 ```
 
-O CNPJ e o valor s„o obrigatÛrios, e o valor deve ser maior que zero. O endpoint
-n„o contÈm decis„o de crÈdito. Enquanto `SERASA-CONTRACT-001` estiver aberta, uma
-tentativa de integraÁ„o termina tecnicamente com HTTP 503 e nenhuma chamada externa.
+Tamb√©m √© permitido utilizar:
 
-## Arquitetura macro
+```json
+{
+  "cnpj": "12345678000199",
+  "subproduto2": "Carteira",
+  "valorSolicitado": 10000
+}
+```
 
-- `api`: controllers, contratos p˙blicos e tratamento de erros;
-- `application`: orquestraÁ„o dos casos de uso e portas de saÌda;
-- `domain`: modelos internos neutros;
-- `integration.serasa`: adaptaÁ„o exclusiva do contrato e autenticaÁ„o Serasa;
-- `security`: seguranÁa HTTP e whitelist adicional;
-- `observability`: correlaÁ„o de requisiÁıes;
-- `idempotency`: ciclo de reserva tÈcnica para prevenÁ„o de duplicidade;
-- `config`: propriedades e cliente HTTP.
+Quando os quatro indicadores financeiros n√£o forem informados, s√£o utilizados os
+valores default `0`, conforme confirma√ß√£o formal da Serasa.
 
-O domÌnio n„o conhece JSON Serasa, OAuth, HTTP, PowerCurve ou nomes como
-`DV-Application`, `DV-Applicant` e `DadosEntradaPersonalizados`.
+---
 
-## SeguranÁa
+# Contrato de entrada
 
-A configuraÁ„o padr„o, HML e PRD È *fail-closed*: apenas o health check È p˙blico e
-os demais endpoints permanecem negados atÈ a definiÁ„o formal da autenticaÁ„o
-machine-to-machine. Exclusivamente no perfil `dev`, `/v1/credit-analyses` È liberado
-sem autenticaÁ„o para testes locais via Postman.
+## `cnpj`
 
-TODO: configurar OAuth2 Client Credentials/JWT para a fronteira Veste -> Marlabs
-quando issuer, audience e claims forem confirmados. A credencial recebida da Veste
-nunca ser· reutilizada na fronteira Marlabs -> Serasa.
+CNPJ do cliente PJ.
 
-A whitelist È opcional, vem de configuraÁ„o externa e È somente um controle
-adicional; ela nunca substitui autenticaÁ„o. N„o se confia em headers de proxy para
-determinar o IP atÈ a topologia de rede ser formalizada.
+Formato atual:
 
-## ConfiguraÁ„o e vari·veis de ambiente
+```text
+14 d√≠gitos num√©ricos
+```
 
-Nenhum secret real È armazenado no repositÛrio. Cada ambiente deve fornecer suas
-prÛprias credenciais por vari·veis de ambiente ou secret manager:
+Exemplo:
 
-| Vari·vel | Uso |
+```json
+"cnpj": "12345678000199"
+```
+
+## `subproduto2`
+
+Identifica a rela√ß√£o do cliente com a Veste.
+
+Valores aceitos:
+
+```text
+Novo
+Carteira
+```
+
+Sem√¢ntica confirmada:
+
+- `Novo`: cliente novo para a Veste;
+- `Carteira`: cliente que j√° pertence √† carteira da Veste.
+
+A defini√ß√£o de qual valor enviar pertence ao sistema Veste.
+
+## `valorSolicitado`
+
+Valor do empr√©stimo solicitado.
+
+A Serasa confirmou que `ValorEmprestimoSolicitado` deve ser enviado como
+**n√∫mero inteiro, sem casas decimais**.
+
+Exemplo:
+
+```json
+"valorSolicitado": 10000
+```
+
+## `pontualidadeInterna`
+
+Valor percentual decimal entre `0` e `100`.
+
+Exemplo:
+
+```json
+"pontualidadeInterna": 87.5
+```
+
+Quando n√£o houver informa√ß√£o:
+
+```text
+0
+```
+
+## `mediaDiasAtraso`
+
+Quantidade inteira de dias de atraso.
+
+Exemplo:
+
+```json
+"mediaDiasAtraso": 12
+```
+
+Quando n√£o houver informa√ß√£o:
+
+```text
+0
+```
+
+## `valorAVencer`
+
+Valor decimal a vencer.
+
+Exemplo:
+
+```json
+"valorAVencer": 15000.75
+```
+
+Quando n√£o houver informa√ß√£o:
+
+```text
+0
+```
+
+## `valorVencido`
+
+Valor decimal vencido.
+
+Exemplo:
+
+```json
+"valorVencido": 2500.30
+```
+
+Quando n√£o houver informa√ß√£o:
+
+```text
+0
+```
+
+A Serasa confirmou que campos vazios ou sem informa√ß√£o podem impactar o
+processamento da estrat√©gia. Por isso, quando esses quatro indicadores n√£o estiverem
+dispon√≠veis, deve ser enviado o valor default `0`.
+
+---
+
+# Payload Serasa / NovaProposta
+
+A aplica√ß√£o transforma o contrato recebido da Veste para o contrato esperado pelo
+PowerCurve.
+
+Estrutura atual:
+
+```json
+{
+  "DV-Application": {
+    "IDservico": "NovaProposta",
+    "Fonte": "12345678",
+    "ProdutoSolicitado": {
+      "Produto": "EMPR",
+      "Subproduto1": "Industria",
+      "Subproduto2": "Novo",
+      "ValorEmprestimoSolicitado": 10000
+    },
+    "DadosEntradaPersonalizados": [
+      {
+        "Chave": "Pontualidade Interna",
+        "Valor": "87.5"
+      },
+      {
+        "Chave": "Media dias de atraso",
+        "Valor": "12"
+      },
+      {
+        "Chave": "Valor a vencer",
+        "Valor": "15000.75"
+      },
+      {
+        "Chave": "Valor vencido",
+        "Valor": "2500.30"
+      }
+    ]
+  },
+  "DV-Applicant": {
+    "Applicant": [
+      {
+        "CNPJ": "12345678000199"
+      }
+    ]
+  }
+}
+```
+
+Campos atualmente fixos no contrato de integra√ß√£o:
+
+```text
+IDservico   = NovaProposta
+Fonte       = 12345678
+Produto     = EMPR
+Subproduto1 = Industria
+```
+
+`Subproduto2` √© recebido da Veste e pode assumir `Novo` ou `Carteira`.
+
+---
+
+# Integra√ß√£o Serasa
+
+A integra√ß√£o com a Serasa utiliza duas etapas independentes.
+
+## 1. Autentica√ß√£o
+
+A aplica√ß√£o solicita um access token utilizando as credenciais t√©cnicas fornecidas
+pela Serasa.
+
+Essas credenciais devem existir exclusivamente em secret manager ou vari√°veis
+seguras do ambiente.
+
+Nunca devem ser:
+
+- hardcoded;
+- adicionadas ao Git;
+- registradas em logs;
+- retornadas pela API;
+- compartilhadas entre ambientes.
+
+## 2. NovaProposta
+
+Ap√≥s obter um token v√°lido:
+
+```text
+PC Cr√©dito
+   |
+   | Bearer <access-token>
+   v
+Serasa / PowerCurve / NovaProposta
+```
+
+O token √© reutilizado enquanto for considerado v√°lido.
+
+Em caso de `401` causado por expira√ß√£o ou invalida√ß√£o, o comportamento planejado √©:
+
+```text
+invalidar token local
+        ->
+obter novo token
+        ->
+repetir chamada no m√°ximo uma vez
+```
+
+Nunca deve existir retry infinito de autentica√ß√£o.
+
+---
+
+# Autentica√ß√£o Veste -> API
+
+A autentica√ß√£o corporativa foi definida pela Veste.
+
+A integra√ß√£o passar√° pelo **API Gateway da Veste**, com autentica√ß√£o e autoriza√ß√£o
+atrav√©s de JWT emitido pelo SSO corporativo/Microsoft Entra ID.
+
+Fluxo informado:
+
+```text
+Sistema consumidor
+       |
+       | credenciais definidas pela Veste
+       v
+SSO Veste
+       |
+       | JWT
+       v
+API Gateway
+       |
+       | valida autentica√ß√£o/autoriza√ß√£o
+       v
+PC Cr√©dito Integration
+```
+
+A configura√ß√£o definitiva de:
+
+- Authorization Server;
+- issuer;
+- audience;
+- scopes;
+- claims;
+- pol√≠ticas de autoriza√ß√£o;
+
+ser√° definida pela Veste durante a implanta√ß√£o no ambiente corporativo.
+
+A aplica√ß√£o **n√£o deve criar um mecanismo pr√≥prio de login** e nunca deve reutilizar
+credenciais da Veste para autentica√ß√£o na Serasa.
+
+As duas fronteiras permanecem independentes:
+
+```text
+Veste -> PC Cr√©dito
+```
+
+e
+
+```text
+PC Cr√©dito -> Serasa
+```
+
+---
+
+# Correlation ID
+
+Toda requisi√ß√£o deve possuir um Correlation ID.
+
+Header:
+
+```http
+X-Correlation-Id
+```
+
+Quando fornecido pelo consumidor, o valor √© preservado.
+
+Quando ausente, a aplica√ß√£o gera um UUID.
+
+O identificador √© disponibilizado no MDC para permitir rastreamento t√©cnico do fluxo.
+
+Logs podem registrar:
+
+- in√≠cio da opera√ß√£o;
+- servi√ßo chamado;
+- resultado t√©cnico;
+- status HTTP;
+- dura√ß√£o;
+- tipo de erro;
+- correlation ID.
+
+Nunca devem registrar:
+
+- Authorization;
+- access token;
+- senha;
+- client secret;
+- payload integral contendo dados sens√≠veis.
+
+---
+
+# Idempot√™ncia
+
+Opera√ß√µes capazes de gerar uma `NovaProposta` devem possuir identificador √∫nico.
+
+Header:
+
+```http
+Idempotency-Key
+```
+
+Exemplo:
+
+```text
+credito-12345678000199-001
+```
+
+Objetivo:
+
+```text
+mesma solicita√ß√£o
+       +
+retry / timeout
+       =
+n√£o gerar duas propostas
+```
+
+A implementa√ß√£o definitiva para ambiente distribu√≠do ainda depende da defini√ß√£o de
+um armazenamento dur√°vel e compartilhado.
+
+N√£o deve ser utilizado controle exclusivamente em mem√≥ria como garantia de
+idempot√™ncia em produ√ß√£o.
+
+---
+
+# Resili√™ncia
+
+Retry deve ser aplicado somente para falhas tecnicamente transit√≥rias.
+
+Candidatos:
+
+```text
+timeout
+HTTP 429
+HTTP 500
+HTTP 502
+HTTP 503
+HTTP 504
+```
+
+N√£o executar retry autom√°tico para:
+
+```text
+HTTP 400
+payload inv√°lido
+erro funcional
+regra de neg√≥cio
+falha permanente de autentica√ß√£o
+```
+
+Circuit Breaker dever√° proteger as chamadas externas quando a implementa√ß√£o de
+resili√™ncia for conclu√≠da.
+
+---
+
+# Configura√ß√£o
+
+Nenhum secret real deve existir no reposit√≥rio.
+
+Vari√°veis atualmente previstas:
+
+| Vari√°vel | Uso |
 |---|---|
-| `SERASA_BASE_URL` | URL base da API Serasa |
-| `SERASA_TOKEN_URL` | URL de obtenÁ„o de token |
-| `SERASA_USERNAME` | usu·rio tÈcnico |
-| `SERASA_PASSWORD` | senha tÈcnica |
-| `SERASA_CLIENT_ID` | identificador OAuth |
-| `SERASA_CLIENT_SECRET` | secret OAuth |
-| `SERASA_CONNECT_TIMEOUT` | timeout de conex„o, padr„o tÈcnico `3s` |
-| `SERASA_READ_TIMEOUT` | timeout de resposta, padr„o tÈcnico `10s` |
-| `M2M_AUTHENTICATION_REQUIRED` | exige autenticaÁ„o M2M; padr„o seguro `true` |
-| `IP_WHITELIST_ENABLED` | habilita a whitelist adicional |
-| `VESTE_ALLOWED_IPS` | IPs separados por vÌrgula |
+| `SERASA_BASE_URL` | URL base Serasa |
+| `SERASA_TOKEN_URL` | endpoint de autentica√ß√£o Serasa |
+| `SERASA_USERNAME` | usu√°rio t√©cnico Serasa |
+| `SERASA_PASSWORD` | senha t√©cnica Serasa |
+| `SERASA_CLIENT_ID` | client ID Serasa |
+| `SERASA_CLIENT_SECRET` | client secret Serasa |
+| `SERASA_CONNECT_TIMEOUT` | timeout de conex√£o |
+| `SERASA_READ_TIMEOUT` | timeout de leitura |
+| `M2M_AUTHENTICATION_REQUIRED` | controle t√©cnico de autentica√ß√£o |
+| `IP_WHITELIST_ENABLED` | habilita whitelist adicional |
+| `VESTE_ALLOWED_IPS` | IPs permitidos quando aplic√°vel |
 
-Os arquivos `application-dev.yml`, `application-hml.yml` e `application-prd.yml`
-identificam os perfis, mas n„o contÍm credenciais. O provisionamento deve garantir
-secrets distintos e isolados por ambiente.
+Ambientes:
 
-## Observabilidade
+```text
+application-dev.yml
+application-hml.yml
+application-prd.yml
+```
 
-`CorrelationIdFilter` preserva `X-Correlation-Id` quando recebido, gera UUID quando
-ausente, disponibiliza o valor no MDC, devolve-o na resposta e permite propagaÁ„o
-no cliente HTTP.
+Credenciais devem ser distintas e isoladas entre DEV, HML e PRD.
 
-Os logs registram inÌcio, serviÁo, resultado tÈcnico, duraÁ„o, tipo de erro e
-correlation ID. N„o devem registrar payload integral, `Authorization`, senha,
-`client_secret` ou access token.
+---
 
-Actuator expıe `health`, `info` e `prometheus`; detalhes do health n„o s„o enviados
-ao consumidor.
+# Resposta da API
 
-## IdempotÍncia
+Durante a fase atual de integra√ß√£o, a resposta da Serasa est√° sendo devolvida pela
+API para permitir valida√ß√£o ponta a ponta do fluxo.
 
-`IdempotencyService` define reserva, conclus„o e falha antes de operaÁıes capazes de
-gerar `NovaProposta`. O skeleton n„o usa mapa em memÛria e n„o finge oferecer
-idempotÍncia distribuÌda.
+Exemplo simplificado:
 
-TODO: implementar armazenamento dur·vel, compartilhado e atÙmico antes de habilitar
-`NovaProposta` ou retries em produÁ„o. A polÌtica de recuperaÁ„o apÛs timeout tambÈm
-precisa ser formalizada para impedir propostas duplicadas.
+```json
+{
+  "serviceContextId": "...",
+  "data": {
+    "DV-Application": {
+      "NumeroProposta": "...",
+      "CodigoRecomendacaoProposta": "...",
+      "NomeRecomendacaoProposta": "..."
+    }
+  }
+}
+```
 
-## ResiliÍncia
+**Este passthrough n√£o representa necessariamente o contrato definitivo da Veste.**
 
-A fronteira Serasa documenta retry seletivo somente para timeout e HTTP 429, 500,
-502, 503 e 504. N„o haver· retry autom·tico para HTTP 400, payload inv·lido, erro
-funcional, regra de negÛcio ou autenticaÁ„o inv·lida recorrente.
+O contrato definitivo:
 
-Em um 401 causado por expiraÁ„o ou invalidaÁ„o, o token poder· ser invalidado,
-renovado e a chamada original repetida no m·ximo uma vez. N„o haver· loop, retry
-indiscriminado, persistÍncia ou logging do token.
+```text
+PC Cr√©dito Integration -> Linx/Veste
+```
 
-Resilience4j ainda n„o foi adicionado: a compatibilidade de um artefato com Spring
-Boot 4.1 deve ser validada antes de escolher uma vers„o. Pelo mesmo motivo, OpenAPI,
-WireMock e Testcontainers sÛ ser„o adicionados quando houver vers„o compatÌvel
-validada e um teste que efetivamente necessite deles.
+ainda ser√° formalizado.
 
-## Executar
+A inten√ß√£o arquitetural √© evitar que o Linx fique diretamente acoplado ao contrato
+interno da Serasa/PowerCurve.
 
-Requer JDK 25:
+---
+
+# Situa√ß√£o atual da homologa√ß√£o
+
+A comunica√ß√£o t√©cnica ponta a ponta est√° operacional:
+
+```text
+POST /v1/credit-analyses
+        ->
+obten√ß√£o do token Serasa
+        ->
+montagem NovaProposta
+        ->
+chamada PowerCurve
+        ->
+recebimento da resposta
+        ->
+retorno ao consumidor
+```
+
+Foram validados tecnicamente os valores:
+
+```text
+Subproduto2 = Novo
+Subproduto2 = Carteira
+```
+
+e o PowerCurve confirmou o recebimento dos respectivos valores na resposta.
+
+No momento, o PowerCurve encerra o processamento PJ com:
+
+```text
+O produto pedido n√£o est√° dispon√≠vel,
+por favor envie um produto v√°lido no seu pedido
+```
+
+Portanto, permanece pendente confirmar com Serasa/Veste a combina√ß√£o v√°lida no
+ambiente de homologa√ß√£o para:
+
+```text
+Produto
+Subproduto1
+Subproduto2
+```
+
+A aplica√ß√£o n√£o deve inventar ou alterar essa combina√ß√£o sem confirma√ß√£o formal.
+
+---
+
+# Pend√™ncias
+
+## SERASA-PRODUCT-001
+
+Confirmar a combina√ß√£o v√°lida para o fluxo PJ no ambiente de homologa√ß√£o:
+
+```text
+Produto = EMPR
+Subproduto1 = Industria
+Subproduto2 = Novo | Carteira
+```
+
+Status:
+
+```text
+PENDENTE
+```
+
+## VESTE-CONTRACT-001
+
+Definir contrato definitivo de resposta:
+
+```text
+PC Cr√©dito Integration -> Linx/Veste
+```
+
+Necess√°rio definir:
+
+- campos necess√°rios ao Linx;
+- tipos;
+- obrigatoriedade;
+- sem√¢ntica;
+- tratamento de aus√™ncia;
+- estrutura de sucesso;
+- estrutura de erro;
+- versionamento.
+
+Status:
+
+```text
+PENDENTE
+```
+
+## VESTE-AUTH-001
+
+Autentica√ß√£o corporativa definida em alto n√≠vel:
+
+```text
+SSO Veste -> JWT -> API Gateway -> PC Cr√©dito
+```
+
+Issuer, audience, scopes, claims e demais par√¢metros ser√£o configurados pela Veste
+durante a implanta√ß√£o.
+
+Status:
+
+```text
+DEFINIDO EM ALTO N√çVEL / CONFIGURA√á√ÉO PENDENTE
+```
+
+## IDEMPOTENCY-001
+
+Implementar armazenamento dur√°vel, compartilhado e at√¥mico para idempot√™ncia antes
+da disponibiliza√ß√£o produtiva.
+
+Status:
+
+```text
+PENDENTE
+```
+
+## RESILIENCE-001
+
+Implementar e validar:
+
+- timeout;
+- retry seletivo;
+- exponential backoff;
+- circuit breaker;
+- renova√ß√£o controlada de token ap√≥s 401.
+
+Status:
+
+```text
+PENDENTE
+```
+
+---
+
+# Executando localmente
+
+Requer JDK 25.
+
+Executar testes:
 
 ```powershell
-.\mvnw.cmd test
+.\mvnw.cmd clean test
+```
+
+Executar aplica√ß√£o no perfil DEV:
+
+```powershell
 .\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=dev"
 ```
 
-Os testes atuais s„o locais, usam JUnit 5 e Mockito e n„o exigem banco, container,
-rede ou chamada Serasa.
+Endpoint local:
 
-## PendÍncias externas
+```text
+POST http://localhost:8080/v1/credit-analyses
+```
 
-### SERASA-CONTRACT-001
+---
 
-Confirmar com a Serasa:
+# Testes
 
-> A Veste enviar· somente CNPJ + valor solicitado, ou tambÈm dever· fornecer
-> Pontualidade Interna, MÈdia dias de atraso, Valor a vencer e Valor vencido?
+O projeto utiliza:
 
-Esses atributos est„o isolados em `BusinessCreditData` e n„o fazem parte do contrato
-p˙blico `CreditAnalysisRequest`. A traduÁ„o para `DadosEntradaPersonalizados` fica
-exclusivamente em `SerasaRequestMapper`.
+- JUnit 5;
+- Mockito;
+- WireMock.
 
-Nenhuma decis„o arquitetural de negÛcio ser· tomada por suposiÁ„o enquanto a
-resposta n„o chegar. Em particular, n„o ser„o usados os valores `100`, `0`, `0` e
-`0` observados em exemplo, nem qualquer outro default inventado.
+Os testes devem cobrir principalmente:
 
-## Outros TODOs conhecidos
+- valida√ß√£o do contrato de entrada;
+- mapeamento Veste -> Serasa;
+- serializa√ß√£o do payload Serasa;
+- autentica√ß√£o Serasa;
+- gerenciamento de token;
+- orquestra√ß√£o do caso de uso;
+- correlation ID;
+- tratamento t√©cnico de erros;
+- idempot√™ncia.
 
-- confirmar o contrato exato de autenticaÁ„o e de resposta OAuth da Serasa;
-- confirmar campos, valores e obrigatoriedade do payload `NovaProposta`;
-- implementar persistÍncia de idempotÍncia antes de habilitar chamadas/retries;
-- formalizar autenticaÁ„o M2M Veste -> Marlabs;
-- validar compatibilidade de Resilience4j, OpenAPI, WireMock e Testcontainers com
-  Spring Boot 4.1 antes de adicionar dependÍncias.
+Nenhum teste unit√°rio deve depender da disponibilidade real da Serasa.
 
+---
+
+# Princ√≠pios do projeto
+
+1. N√£o implementar decis√£o de cr√©dito.
+2. N√£o inventar campos ou regras Serasa.
+3. N√£o preencher lacunas contratuais silenciosamente.
+4. Manter Veste e Serasa como fronteiras de seguran√ßa independentes.
+5. Nunca registrar secrets ou tokens.
+6. N√£o expor detalhes desnecess√°rios da Serasa ao consumidor.
+7. Aplicar retry somente em falhas transit√≥rias.
+8. Evitar duplica√ß√£o de propostas.
+9. Toda requisi√ß√£o deve ser rastre√°vel por Correlation ID.
+10. Toda decis√£o contratual externa relevante deve possuir evid√™ncia formal.
+11. DEV, HML e PRD devem possuir configura√ß√µes e credenciais isoladas.
+12. A camada de integra√ß√£o deve permanecer simples e n√£o assumir responsabilidades
+    de um motor de cr√©dito.

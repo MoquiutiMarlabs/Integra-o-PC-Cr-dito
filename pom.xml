@@ -72,10 +72,16 @@
 			<artifactId>spring-boot-starter-webmvc-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<dependency>
+			<groupId>org.wiremock</groupId>
+			<artifactId>wiremock-standalone</artifactId>
+			<version>3.13.1</version>
+			<scope>test</scope>
+		</dependency>
 
 		<!-- TODO TECH: add Resilience4j only after Spring Boot 4.1 compatibility is validated. -->
 		<!-- TODO TECH: add OpenAPI only after a compatible artifact/version is validated. -->
-		<!-- TODO TECH: add WireMock and Testcontainers when tests require them and Boot 4.1 compatibility is validated. -->
+		<!-- TODO TECH: add Testcontainers when tests require it and Boot 4.1 compatibility is validated. -->
 	</dependencies>
 
 	<build>
