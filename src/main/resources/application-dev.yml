@@ -7,12 +7,17 @@ serasa:
   contract:
     pj-input-mode: ${SERASA_PJ_INPUT_MODE:OMIT}
 
+  http:
+    connect-timeout: ${SERASA_CONNECT_TIMEOUT:3s}
+    read-timeout: ${SERASA_READ_TIMEOUT:60s}
+
 server:
   port: ${SERVER_PORT:8080}
 
 security:
   m2m:
     authentication-required: false
+
   ip-whitelist:
     enabled: ${IP_WHITELIST_ENABLED:false}
 
