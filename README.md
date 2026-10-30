@@ -705,141 +705,154 @@ interno da Serasa/PowerCurve.
 
 ---
 
+
 # Situação atual da homologação
 
-A comunicação técnica ponta a ponta está operacional:
+A integração técnica com Serasa/PowerCurve foi validada em ambiente sandbox para propostas PJ.
 
-```text
-POST /v1/credit-analyses
-        ->
-obtenção do token Serasa
-        ->
-montagem NovaProposta
-        ->
-chamada PowerCurve
-        ->
-recebimento da resposta
-        ->
-retorno ao consumidor
+Fluxo validado:
+
+1. Recebimento de requisição HTTP pela API Marlabs.
+2. Obtenção e reutilização do token Serasa.
+3. Transformação do request para NovaProposta.
+4. Envio ao PowerCurve.
+5. Processamento da proposta.
+6. Recebimento da decisão.
+7. Retorno síncrono ao consumidor.
+
+## Produto PJ validado
+
+- Produto: EMPR
+- Subproduto1: Industria
+- Subproduto2: Novo ou Carteira
+
+A Serasa confirmou formalmente essa combinação.
+
+CNPJ válido fornecido para testes sandbox: 23167514000131.
+
+Foram obtidos retornos de propostas processadas com decisão APROVADA para Novo e Carteira.
+
+O resultado de crédito pertence exclusivamente ao PowerCurve/Serasa.
+
+## DV-DABilling
+
+O bloco DV-DABilling refere-se à cobrança comercial da plataforma PC Crédito.
+
+A Serasa confirmou que, no sandbox, o retorno de erro nesse bloco é esperado e não interfere na decisão de crédito.
+
+A aplicação não deve interpretar DV-DABilling como resultado da política de crédito.
+
+## Limite sugerido
+
+A Serasa confirmou o campo:
+
+data["DV-Application"].ApplicationResults.ValorCreditoRecomendado
+
+Tipo: numérico decimal, com ponto como separador decimal.
+
+Esse valor será mapeado para limiteSugerido no contrato V1 da API.
+
+A aplicação não calcula nem altera o limite recomendado.
+
+## Contrato Veste V1
+
+A Veste aprovou a adoção de contrato próprio e estável, sem expor diretamente o payload interno do PowerCurve.
+
+A tabela VST_CLIENTES_WORKFLOW é persistência interna do Linx, não contrato HTTP.
+
+### DE/PARA tipoConsulta
+
+| tipoConsulta Veste | Subproduto2 Serasa |
+|---|---|
+| NOVO | Novo |
+| REATIVACAO | Carteira |
+| AUMENTO_LIMITE | Carteira |
+
+Esse mapeamento foi confirmado pela Veste.
+
+### Histórico
+
+Indicadores previstos:
+
+- pontualidadeInterna
+- mediaDiasAtraso
+- valorAVencer
+- valorVencido
+
+A Serasa confirmou o envio de zero quando não houver informação.
+
+A Veste ainda está verificando a disponibilidade e os formatos desses indicadores no Linx.
+
+### Faturamento
+
+O campo valorFaturamento foi mencionado pela Veste, mas ainda não existe mapeamento formal confirmado para a Serasa.
+
+Não enviar esse campo ao PowerCurve sem confirmação do contrato de destino.
+
+### Resposta V1 proposta
+
+```json
+{
+  "requestId": "identificador-da-solicitacao",
+  "serasa": {
+    "numeroProposta": "EOAC000000010571",
+    "codigoRecomendacao": "07",
+    "nomeRecomendacao": "APROVADA",
+    "mensagemDecisao": "Aprovar.",
+    "classificacaoDecisao": "Aprovar",
+    "limiteSugerido": null
+  }
+}
 ```
 
-Foram validados tecnicamente os valores:
+O exemplo acima ilustra a estrutura proposta. O limiteSugerido será preenchido quando o campo correspondente estiver presente no retorno da Serasa.
 
-```text
-Subproduto2 = Novo
-Subproduto2 = Carteira
-```
+Os dados de decisão representam exclusivamente o resultado do PowerCurve, não a aprovação final do workflow Linx.
 
-e o PowerCurve confirmou o recebimento dos respectivos valores na resposta.
+## Pendências para homologação integrada
 
-No momento, o PowerCurve encerra o processamento PJ com:
+### VESTE-CONTRACT-001
 
-```text
-O produto pedido não está disponível,
-por favor envie um produto válido no seu pedido
-```
+Implementar e testar os DTOs e mappers do contrato V1 aprovado conceitualmente.
 
-Portanto, permanece pendente confirmar com Serasa/Veste a combinação válida no
-ambiente de homologação para:
+Status: PENDENTE DE IMPLEMENTAÇÃO.
 
-```text
-Produto
-Subproduto1
-Subproduto2
-```
+### VESTE-HISTORY-001
 
-A aplicação não deve inventar ou alterar essa combinação sem confirmação formal.
+Confirmar disponibilidade e formatos dos indicadores históricos no Linx.
 
----
+Status: AGUARDANDO VESTE.
 
-# Pendências
+### VESTE-FATURAMENTO-001
 
-## SERASA-PRODUCT-001
+Confirmar necessidade e mapeamento de valorFaturamento para o PowerCurve.
 
-Confirmar a combinação válida para o fluxo PJ no ambiente de homologação:
+Status: AGUARDANDO DEFINIÇÃO.
 
-```text
-Produto = EMPR
-Subproduto1 = Industria
-Subproduto2 = Novo | Carteira
-```
+### VESTE-AUTH-001
 
-Status:
+Configurar integração com Gateway/SSO/JWT da Veste em homologação e definir responsabilidades de validação do token.
 
-```text
-PENDENTE
-```
+Status: CONFIGURAÇÃO PENDENTE.
 
-## VESTE-CONTRACT-001
+### IDEMPOTENCY-001
 
-Definir contrato definitivo de resposta:
+Implementar armazenamento durável, compartilhado e atômico para idempotência antes da operação produtiva.
 
-```text
-PC Crédito Integration -> Linx/Veste
-```
+Requisições NovaProposta não devem ser repetidas automaticamente após timeout sem garantia de idempotência.
 
-Necessário definir:
+Status: PENDENTE.
 
-- campos necessários ao Linx;
-- tipos;
-- obrigatoriedade;
-- semântica;
-- tratamento de ausência;
-- estrutura de sucesso;
-- estrutura de erro;
-- versionamento.
+### RESILIENCE-001
 
-Status:
+Validar timeouts, tratamento de erros, circuit breaker e renovação controlada do token Serasa.
 
-```text
-PENDENTE
-```
+Status: PENDENTE DE VALIDAÇÃO COMPLETA.
 
-## VESTE-AUTH-001
+## Próxima etapa
 
-Autenticação corporativa definida em alto nível:
+Concluir contrato V1, testes automatizados e documentação OpenAPI para disponibilização à Veste e início da homologação integrada com o Linx.
 
-```text
-SSO Veste -> JWT -> API Gateway -> PC Crédito
-```
-
-Issuer, audience, scopes, claims e demais parâmetros serão configurados pela Veste
-durante a implantação.
-
-Status:
-
-```text
-DEFINIDO EM ALTO NÍVEL / CONFIGURAÇÃO PENDENTE
-```
-
-## IDEMPOTENCY-001
-
-Implementar armazenamento durável, compartilhado e atômico para idempotência antes
-da disponibilização produtiva.
-
-Status:
-
-```text
-PENDENTE
-```
-
-## RESILIENCE-001
-
-Implementar e validar:
-
-- timeout;
-- retry seletivo;
-- exponential backoff;
-- circuit breaker;
-- renovação controlada de token após 401.
-
-Status:
-
-```text
-PENDENTE
-```
-
----
 
 # Executando localmente
 
