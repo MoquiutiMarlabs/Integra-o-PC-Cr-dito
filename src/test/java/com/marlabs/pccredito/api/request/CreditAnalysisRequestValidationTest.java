@@ -47,7 +47,7 @@ class CreditAnalysisRequestValidationTest {
 				VALIDATOR.validate(request);
 
 		assertTrue(hasViolationFor(violations, "cnpj"));
-		assertTrue(hasViolationFor(violations, "subproduto2"));
+		assertTrue(hasViolationFor(violations, "tipoConsulta"));
 		assertTrue(hasViolationFor(violations, "valorSolicitado"));
 	}
 
@@ -193,7 +193,7 @@ class CreditAnalysisRequestValidationTest {
 		CreditAnalysisRequest request =
 				new CreditAnalysisRequest(
 						"12345678000199",
-						CustomerRelationshipType.CARTEIRA,
+						CustomerRelationshipType.REATIVACAO,
 						10000L,
 						null,
 						null,

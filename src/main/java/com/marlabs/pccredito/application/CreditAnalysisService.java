@@ -44,7 +44,7 @@ public class CreditAnalysisService {
         CreditAnalysis analysis = new CreditAnalysis(
                 requestId,
                 request.cnpj(),
-                request.subproduto2(),
+                request.tipoConsulta(),
                 request.valorSolicitado(),
                 request.pontualidadeInterna(),
                 request.mediaDiasAtraso(),

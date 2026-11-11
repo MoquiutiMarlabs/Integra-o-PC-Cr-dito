@@ -6,8 +6,8 @@ import com.fasterxml.jackson.annotation.JsonValue;
 public enum CustomerRelationshipType {
 
     NOVO("Novo"),
-    CARTEIRA("Carteira");
-
+    REATIVACAO("Carteira"),
+    AUMENTO_LIMITE("Carteira");
     private final String serasaValue;
 
     CustomerRelationshipType(String serasaValue) {
@@ -20,7 +20,7 @@ public enum CustomerRelationshipType {
 
     @JsonValue
     public String jsonValue() {
-        return serasaValue;
+        return name();
     }
 
     @JsonCreator
@@ -31,14 +31,13 @@ public enum CustomerRelationshipType {
         }
 
         for (CustomerRelationshipType type : values()) {
-            if (type.serasaValue.equalsIgnoreCase(value)
-                    || type.name().equalsIgnoreCase(value)) {
+            if (type.name().equals(value)) {
                 return type;
             }
         }
 
         throw new IllegalArgumentException(
-                "subproduto2 must be Novo or Carteira"
+                "tipoConsulta must be NOVO, REATIVACAO or AUMENTO_LIMITE"
         );
     }
 }
