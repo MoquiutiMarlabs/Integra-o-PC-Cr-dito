@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import com.marlabs.pccredito.integration.serasa.PendingSerasaContractException;
 import com.marlabs.pccredito.observability.CorrelationIdFilter;
+import com.marlabs.pccredito.integration.serasa.InvalidSerasaResponseException;
 
 import jakarta.servlet.http.HttpServletRequest;
 
@@ -51,6 +52,25 @@ public class ApiExceptionHandler {
 				PendingSerasaContractException.CONTRACT_ID);
 		return error(HttpStatus.SERVICE_UNAVAILABLE, PendingSerasaContractException.CONTRACT_ID,
 				"External contract confirmation is pending", Map.of(), request);
+	}
+
+	@ExceptionHandler(InvalidSerasaResponseException.class)
+	ResponseEntity<ApiError> handleInvalidSerasaResponse(
+			InvalidSerasaResponseException exception,
+			HttpServletRequest request) {
+
+		LOGGER.warn(
+				"serasa_response_invalid errorType={}",
+				exception.getClass().getSimpleName()
+		);
+
+		return error(
+				HttpStatus.BAD_GATEWAY,
+				"SERASA_INVALID_RESPONSE",
+				"Invalid response received from external credit service",
+				Map.of(),
+				request
+		);
 	}
 
 	@ExceptionHandler(Exception.class)

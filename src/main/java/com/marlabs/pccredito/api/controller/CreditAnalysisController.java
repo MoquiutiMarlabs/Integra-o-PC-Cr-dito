@@ -2,6 +2,7 @@ package com.marlabs.pccredito.api.controller;
 
 import com.marlabs.pccredito.api.request.CreditAnalysisRequest;
 import com.marlabs.pccredito.application.CreditAnalysisService;
+import com.marlabs.pccredito.api.response.CreditAnalysisResponse;
 
 import jakarta.validation.Valid;
 
@@ -17,36 +18,34 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/v1/credit-analyses")
 public class CreditAnalysisController {
 
-	private final CreditAnalysisService creditAnalysisService;
+    private final CreditAnalysisService creditAnalysisService;
 
-	public CreditAnalysisController(
-			CreditAnalysisService creditAnalysisService) {
+    public CreditAnalysisController(
+            CreditAnalysisService creditAnalysisService) {
 
-		this.creditAnalysisService = creditAnalysisService;
-	}
+        this.creditAnalysisService = creditAnalysisService;
+    }
 
-	@PostMapping(
-			produces = MediaType.APPLICATION_JSON_VALUE
-	)
-	public ResponseEntity<String> analyze(
-			@Valid
-			@RequestBody
-			CreditAnalysisRequest request,
+    @PostMapping(
+            produces = MediaType.APPLICATION_JSON_VALUE
+    )
+    public ResponseEntity<CreditAnalysisResponse> analyze(
+            @Valid
+            @RequestBody
+            CreditAnalysisRequest request,
 
-			@RequestHeader(
-					value = "Idempotency-Key",
-					required = false
-			)
-			String idempotencyKey) {
+            @RequestHeader(
+                    value = "Idempotency-Key",
+                    required = false
+            )
+            String idempotencyKey) {
 
-		String serasaResponse =
-				creditAnalysisService.analyze(
-						request,
-						idempotencyKey
-				);
+        CreditAnalysisResponse response =
+                creditAnalysisService.analyze(
+                        request,
+                        idempotencyKey
+                );
 
-		return ResponseEntity.ok()
-				.contentType(MediaType.APPLICATION_JSON)
-				.body(serasaResponse);
-	}
+        return ResponseEntity.ok(response);
+    }
 }

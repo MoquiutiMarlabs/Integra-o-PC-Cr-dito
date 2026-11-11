@@ -12,6 +12,8 @@ import com.marlabs.pccredito.domain.CreditAnalysis;
 import com.marlabs.pccredito.idempotency.IdempotencyService;
 import com.marlabs.pccredito.idempotency.IdempotencyService.Reservation;
 import com.marlabs.pccredito.integration.serasa.SerasaTokenManager;
+import com.marlabs.pccredito.api.response.CreditAnalysisResponse;
+import com.marlabs.pccredito.integration.serasa.SerasaResponseMapper;
 
 @Service
 public class CreditAnalysisService {
@@ -22,18 +24,21 @@ public class CreditAnalysisService {
     private final SerasaCreditGateway serasaCreditGateway;
     private final IdempotencyService idempotencyService;
     private final SerasaTokenManager serasaTokenManager;
+    private final SerasaResponseMapper serasaResponseMapper;
 
     public CreditAnalysisService(
             SerasaCreditGateway serasaCreditGateway,
             IdempotencyService idempotencyService,
-            SerasaTokenManager serasaTokenManager) {
+            SerasaTokenManager serasaTokenManager,
+            SerasaResponseMapper serasaResponseMapper) {
 
         this.serasaCreditGateway = serasaCreditGateway;
         this.idempotencyService = idempotencyService;
         this.serasaTokenManager = serasaTokenManager;
+        this.serasaResponseMapper = serasaResponseMapper;
     }
 
-    public String analyze(
+    public CreditAnalysisResponse analyze(
             CreditAnalysisRequest request,
             String idempotencyKey) {
 
@@ -75,6 +80,12 @@ public class CreditAnalysisService {
                             accessToken
                     );
 
+            CreditAnalysisResponse vesteResponse =
+                    serasaResponseMapper.toVesteResponse(
+                            requestId,
+                            serasaResponse
+                    );
+
             idempotencyService.complete(reservation);
 
             LOGGER.info(
@@ -83,7 +94,7 @@ public class CreditAnalysisService {
                     elapsedMillis(startedAt)
             );
 
-            return serasaResponse;
+            return vesteResponse;
 
         } catch (RuntimeException exception) {
 

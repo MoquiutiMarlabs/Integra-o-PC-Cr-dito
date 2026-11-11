@@ -13,10 +13,12 @@ import java.math.BigDecimal;
 import org.junit.jupiter.api.Test;
 
 import com.marlabs.pccredito.api.request.CreditAnalysisRequest;
+import com.marlabs.pccredito.api.response.CreditAnalysisResponse;
 import com.marlabs.pccredito.application.port.SerasaCreditGateway;
 import com.marlabs.pccredito.domain.CustomerRelationshipType;
 import com.marlabs.pccredito.idempotency.IdempotencyService;
 import com.marlabs.pccredito.idempotency.IdempotencyService.Reservation;
+import com.marlabs.pccredito.integration.serasa.SerasaResponseMapper;
 import com.marlabs.pccredito.integration.serasa.SerasaTokenManager;
 
 class CreditAnalysisServiceTest {
@@ -32,6 +34,9 @@ class CreditAnalysisServiceTest {
 
 		SerasaTokenManager tokenManager =
 				mock(SerasaTokenManager.class);
+
+		SerasaResponseMapper responseMapper =
+				mock(SerasaResponseMapper.class);
 
 		when(
 				idempotencyService.reserve(
@@ -57,11 +62,32 @@ class CreditAnalysisServiceTest {
 				)
 		).thenReturn("fake-serasa-response");
 
+		CreditAnalysisResponse expectedResponse =
+				new CreditAnalysisResponse(
+						"request-id",
+						new CreditAnalysisResponse.SerasaResult(
+								"proposal-123",
+								"07",
+								"APROVADA",
+								"Aprovar.",
+								"Aprovar",
+								new BigDecimal("25000.00")
+						)
+				);
+
+		when(
+				responseMapper.toVesteResponse(
+						anyString(),
+						eq("fake-serasa-response")
+				)
+		).thenReturn(expectedResponse);
+
 		CreditAnalysisService service =
 				new CreditAnalysisService(
 						gateway,
 						idempotencyService,
-						tokenManager
+						tokenManager,
+						responseMapper
 				);
 
 		CreditAnalysisRequest request =
@@ -75,14 +101,14 @@ class CreditAnalysisServiceTest {
 						new BigDecimal("2500.30")
 				);
 
-		String response =
+		CreditAnalysisResponse response =
 				service.analyze(
 						request,
 						"idempotency-123"
 				);
 
 		assertEquals(
-				"fake-serasa-response",
+				expectedResponse,
 				response
 		);
 
@@ -100,6 +126,12 @@ class CreditAnalysisServiceTest {
 						any(),
 						eq("idempotency-123"),
 						eq("fake-token")
+				);
+
+		verify(responseMapper)
+				.toVesteResponse(
+						anyString(),
+						eq("fake-serasa-response")
 				);
 
 		verify(idempotencyService)
