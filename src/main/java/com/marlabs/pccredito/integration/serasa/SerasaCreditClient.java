@@ -12,6 +12,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
 
 @Component
 public class SerasaCreditClient implements SerasaCreditGateway {
@@ -22,15 +23,18 @@ public class SerasaCreditClient implements SerasaCreditGateway {
     private final RestClient restClient;
     private final SerasaRequestMapper requestMapper;
     private final SerasaProperties properties;
+    private final SerasaTokenManager tokenManager;
 
     public SerasaCreditClient(
             RestClient serasaRestClient,
             SerasaRequestMapper requestMapper,
-            SerasaProperties properties) {
+            SerasaProperties properties,
+            SerasaTokenManager tokenManager) {
 
         this.restClient = serasaRestClient;
         this.requestMapper = requestMapper;
         this.properties = properties;
+        this.tokenManager = tokenManager;
     }
 
     @Override
@@ -55,40 +59,38 @@ public class SerasaCreditClient implements SerasaCreditGateway {
         );
 
         try {
+            try {
+                return executeRequest(
+                        analysis,
+                        request,
+                        accessToken,
+                        startedAt
+                );
 
-            ResponseEntity<String> response = restClient
-                    .post()
-                    .uri(properties.getNovaPropostaPath())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .accept(MediaType.APPLICATION_JSON)
-                    .header(
-                            HttpHeaders.AUTHORIZATION,
-                            "Bearer " + accessToken
-                    )
-                    .header(
-                            "X-Screenless-Kill-Null",
-                            "true"
-                    )
-                    .body(request)
-                    .retrieve()
-                    .toEntity(String.class);
+            } catch (RestClientResponseException exception) {
 
-            LOGGER.info(
-                    "serasa_credit_finished requestId={} operation=NovaProposta technicalResult=success httpStatus={} durationMs={}",
-                    analysis.requestId(),
-                    response.getStatusCode().value(),
-                    elapsedMillis(startedAt)
-            );
+                if (exception.getStatusCode().value() != 401) {
+                    throw exception;
+                }
 
-            String responseBody = response.getBody();
+                LOGGER.warn(
+                        "serasa_token_rejected requestId={} httpStatus=401 retry=1",
+                        analysis.requestId()
+                );
 
-            if (responseBody == null || responseBody.isBlank()) {
-                throw new IllegalStateException(
-                        "Serasa NovaProposta returned an empty response body"
+                tokenManager.invalidateIfCurrent(accessToken);
+
+                String refreshedToken =
+                        tokenManager.getValidAccessToken();
+
+                // Apenas uma repeticao apos HTTP 401.
+                return executeRequest(
+                        analysis,
+                        request,
+                        refreshedToken,
+                        startedAt
                 );
             }
-
-            return responseBody;
 
         } catch (RuntimeException exception) {
 
@@ -101,6 +103,47 @@ public class SerasaCreditClient implements SerasaCreditGateway {
 
             throw exception;
         }
+    }
+
+    private String executeRequest(
+            CreditAnalysis analysis,
+            SerasaNovaPropostaRequest request,
+            String accessToken,
+            long startedAt) {
+
+        ResponseEntity<String> response = restClient
+                .post()
+                .uri(properties.getNovaPropostaPath())
+                .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.APPLICATION_JSON)
+                .header(
+                        HttpHeaders.AUTHORIZATION,
+                        "Bearer " + accessToken
+                )
+                .header(
+                        "X-Screenless-Kill-Null",
+                        "true"
+                )
+                .body(request)
+                .retrieve()
+                .toEntity(String.class);
+
+        String responseBody = response.getBody();
+
+        if (responseBody == null || responseBody.isBlank()) {
+            throw new InvalidSerasaResponseException(
+                    "Serasa NovaProposta returned an empty response"
+            );
+        }
+
+        LOGGER.info(
+                "serasa_credit_finished requestId={} operation=NovaProposta technicalResult=success httpStatus={} durationMs={}",
+                analysis.requestId(),
+                response.getStatusCode().value(),
+                elapsedMillis(startedAt)
+        );
+
+        return responseBody;
     }
 
     private void validateConfiguration() {

@@ -74,6 +74,17 @@ public class SerasaTokenManager {
 				&& Instant.now().isBefore(expiresAt);
 	}
 
+	public synchronized void invalidateIfCurrent(
+			String rejectedToken) {
+
+		if (rejectedToken != null
+				&& rejectedToken.equals(accessToken)) {
+
+			accessToken = null;
+			expiresAt = null;
+		}
+	}
+
 	public int maximumReplayCountAfterUnauthorized() {
 		return 1;
 	}
