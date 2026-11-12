@@ -11,6 +11,8 @@ server:
   port: ${SERVER_PORT:8080}
 
 security:
+  m2m:
+    authentication-required: true
   ip-whitelist:
     enabled: ${IP_WHITELIST_ENABLED:true}
 

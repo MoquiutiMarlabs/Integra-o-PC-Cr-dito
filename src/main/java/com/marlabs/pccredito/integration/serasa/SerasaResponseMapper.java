@@ -110,13 +110,21 @@ public class SerasaResponseMapper {
     }
 
     private String textOrNull(JsonNode node) {
-        if (node == null || node.isMissingNode()
-                || node.isNull() || !node.isValueNode()) {
+
+        if (node == null
+                || node.isMissingNode()
+                || node.isNull()
+                || !node.isValueNode()) {
             return null;
         }
 
-        return node.asText();
+        String value = node.asText();
+
+        return value == null || value.isBlank()
+                ? null
+                : value;
     }
+
 
     private BigDecimal decimalOrNull(JsonNode node) {
         String value = textOrNull(node);
