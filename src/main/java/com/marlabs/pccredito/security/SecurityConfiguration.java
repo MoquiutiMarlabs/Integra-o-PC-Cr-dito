@@ -17,15 +17,11 @@ public class SecurityConfiguration {
 			HttpSecurity http,
 			Environment environment) throws Exception {
 
+		validateGatewayConfiguration(environment);
+
 		boolean dev = environment.acceptsProfiles(
 				Profiles.of("dev")
 		);
-
-		boolean authenticationRequired =
-				validateAuthenticationConfiguration(environment);
-
-		IpWhitelistFilter ipWhitelistFilter =
-				new IpWhitelistFilter(environment);
 
 		return http
 				.csrf(csrf -> csrf.disable())
@@ -34,15 +30,14 @@ public class SecurityConfiguration {
 								SessionCreationPolicy.STATELESS
 						)
 				)
-				.httpBasic(httpBasic -> httpBasic.disable())
-				.formLogin(formLogin -> formLogin.disable())
+				.httpBasic(basic -> basic.disable())
+				.formLogin(login -> login.disable())
 				.logout(logout -> logout.disable())
 				.addFilterBefore(
-						ipWhitelistFilter,
+						new IpWhitelistFilter(environment),
 						AnonymousAuthenticationFilter.class
 				)
 				.authorizeHttpRequests(authorize -> {
-
 					authorize.requestMatchers(
 							"/actuator/health",
 							"/actuator/health/**"
@@ -54,32 +49,17 @@ public class SecurityConfiguration {
 						).permitAll();
 					}
 
-					if (authenticationRequired) {
-						// TODO VESTE-SSO:
-						// Configurar validacao JWT ou fronteira
-						// confiavel com o Gateway, apos definicao
-						// formal da arquitetura de autenticacao.
-						authorize.anyRequest().denyAll();
-					} else {
-						authorize.requestMatchers(
-								"/v1/credit-analyses"
-						).permitAll();
+					authorize.requestMatchers(
+							"/v1/credit-analyses"
+					).permitAll();
 
-						authorize.anyRequest().denyAll();
-					}
+					authorize.anyRequest().denyAll();
 				})
 				.build();
 	}
 
-	static boolean validateAuthenticationConfiguration(
+	static void validateGatewayConfiguration(
 			Environment environment) {
-
-		boolean authenticationRequired =
-				environment.getProperty(
-						"security.m2m.authentication-required",
-						Boolean.class,
-						true
-				);
 
 		boolean dev = environment.acceptsProfiles(
 				Profiles.of("dev")
@@ -93,13 +73,36 @@ public class SecurityConfiguration {
 				Profiles.of("prd")
 		);
 
-		if (!authenticationRequired && (!dev || hml || prd)) {
+		if (dev && (hml || prd)) {
 			throw new IllegalStateException(
-					"Authentication cannot be disabled " +
-							"outside the exclusive DEV profile"
+					"DEV cannot be combined with HML or PRD"
 			);
 		}
 
-		return authenticationRequired;
+		if (hml && prd) {
+			throw new IllegalStateException(
+					"HML and PRD cannot be active together"
+			);
+		}
+
+		if (!dev && !hml && !prd) {
+			throw new IllegalStateException(
+					"An explicit DEV, HML or PRD profile is required"
+			);
+		}
+
+		if (hml || prd) {
+			boolean gatewayTrusted = environment.getProperty(
+					"security.gateway.trust-enabled",
+					Boolean.class,
+					false
+			);
+
+			if (!gatewayTrusted) {
+				throw new IllegalStateException(
+						"Veste Gateway trust must be explicitly enabled"
+				);
+			}
+		}
 	}
 }

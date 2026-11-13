@@ -11,10 +11,12 @@ server:
   port: ${SERVER_PORT:8080}
 
 security:
-  m2m:
-    authentication-required: true
+  gateway:
+    trust-enabled: ${VESTE_GATEWAY_TRUST_ENABLED:false}
+
   ip-whitelist:
     enabled: ${IP_WHITELIST_ENABLED:true}
+    allowed-addresses: ${VESTE_ALLOWED_IPS:}
 
 management:
   endpoint:

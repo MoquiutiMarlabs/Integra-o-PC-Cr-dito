@@ -1,6 +1,7 @@
 package com.marlabs.pccredito.security;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.env.MockEnvironment;
@@ -8,90 +9,84 @@ import org.springframework.mock.env.MockEnvironment;
 class SecurityConfigurationTest {
 
     @Test
-    void shouldAllowDisabledAuthenticationInDev() {
-        MockEnvironment environment = new MockEnvironment()
-                .withProperty(
-                        "security.m2m.authentication-required",
-                        "false"
-                );
-
+    void shouldAllowDevWithoutGatewayTrust() {
+        var environment = new MockEnvironment();
         environment.setActiveProfiles("dev");
 
-        assertFalse(
-                SecurityConfiguration
-                        .validateAuthenticationConfiguration(environment)
+        assertDoesNotThrow(() ->
+                SecurityConfiguration.validateGatewayConfiguration(
+                        environment
+                )
         );
     }
 
     @Test
-    void shouldRejectDisabledAuthenticationInHml() {
-        assertAuthenticationCannotBeDisabled("hml");
+    void shouldRejectHmlWithoutGatewayTrust() {
+        assertGatewayRequired("hml");
     }
 
     @Test
-    void shouldRejectDisabledAuthenticationInPrd() {
-        assertAuthenticationCannotBeDisabled("prd");
+    void shouldRejectPrdWithoutGatewayTrust() {
+        assertGatewayRequired("prd");
     }
 
     @Test
-    void shouldRejectDisabledAuthenticationWithoutProfile() {
-        MockEnvironment environment = new MockEnvironment()
-                .withProperty(
-                        "security.m2m.authentication-required",
-                        "false"
-                );
-
-        assertThrows(
-                IllegalStateException.class,
-                () -> SecurityConfiguration
-                        .validateAuthenticationConfiguration(environment)
-        );
+    void shouldAllowHmlWithGatewayTrust() {
+        assertGatewayAccepted("hml");
     }
 
     @Test
-    void shouldRejectDevCombinedWithHml() {
-        MockEnvironment environment = new MockEnvironment()
-                .withProperty(
-                        "security.m2m.authentication-required",
-                        "false"
-                );
+    void shouldAllowPrdWithGatewayTrust() {
+        assertGatewayAccepted("prd");
+    }
 
+    @Test
+    void shouldRejectDevAndHmlTogether() {
+        var environment = new MockEnvironment();
         environment.setActiveProfiles("dev", "hml");
 
         assertThrows(
                 IllegalStateException.class,
                 () -> SecurityConfiguration
-                        .validateAuthenticationConfiguration(environment)
+                        .validateGatewayConfiguration(environment)
         );
     }
 
     @Test
-    void shouldRequireAuthenticationByDefault() {
-        MockEnvironment environment = new MockEnvironment();
+    void shouldRejectMissingProfile() {
+        var environment = new MockEnvironment();
 
-        environment.setActiveProfiles("hml");
-
-        assertTrue(
-                SecurityConfiguration
-                        .validateAuthenticationConfiguration(environment)
+        assertThrows(
+                IllegalStateException.class,
+                () -> SecurityConfiguration
+                        .validateGatewayConfiguration(environment)
         );
     }
 
-    private void assertAuthenticationCannotBeDisabled(
-            String profile) {
-
-        MockEnvironment environment = new MockEnvironment()
-                .withProperty(
-                        "security.m2m.authentication-required",
-                        "false"
-                );
-
+    private void assertGatewayRequired(String profile) {
+        var environment = new MockEnvironment();
         environment.setActiveProfiles(profile);
 
         assertThrows(
                 IllegalStateException.class,
                 () -> SecurityConfiguration
-                        .validateAuthenticationConfiguration(environment)
+                        .validateGatewayConfiguration(environment)
+        );
+    }
+
+    private void assertGatewayAccepted(String profile) {
+        var environment = new MockEnvironment()
+                .withProperty(
+                        "security.gateway.trust-enabled",
+                        "true"
+                );
+
+        environment.setActiveProfiles(profile);
+
+        assertDoesNotThrow(() ->
+                SecurityConfiguration.validateGatewayConfiguration(
+                        environment
+                )
         );
     }
 }

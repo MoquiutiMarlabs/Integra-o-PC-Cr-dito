@@ -15,11 +15,11 @@ server:
   port: ${SERVER_PORT:8080}
 
 security:
-  m2m:
-    authentication-required: false
+  gateway:
+    trust-enabled: false
 
   ip-whitelist:
-    enabled: ${IP_WHITELIST_ENABLED:false}
+    enabled: false
 
 management:
   endpoint:

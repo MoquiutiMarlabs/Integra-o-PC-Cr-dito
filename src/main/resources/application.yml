@@ -18,12 +18,13 @@ serasa:
     read-timeout: ${SERASA_READ_TIMEOUT:10s}
 
 security:
-  m2m:
-    authentication-required: ${M2M_AUTHENTICATION_REQUIRED:true}
+  gateway:
+    trust-enabled: ${VESTE_GATEWAY_TRUST_ENABLED:false}
 
   ip-whitelist:
     enabled: ${IP_WHITELIST_ENABLED:false}
     allowed-addresses: ${VESTE_ALLOWED_IPS:}
+
 
 management:
   endpoints:
